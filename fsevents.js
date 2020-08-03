@@ -21,14 +21,11 @@ function watch(path, handler) {
     throw new TypeError(`fsevents argument 2 must be a function and not a ${typeof handler}`);
   }
 
-  let instance = Native.start(path, handler);
-  if (!instance) throw new Error(`could not watch: ${path}`);
+  let VFS = require('./vfs');
+  let vfs = new VFS(path, Native);
+  vfs.watch(handler);
   return () => {
-    const result = instance
-      ? Promise.resolve(instance).then(Native.stop)
-      : Promise.resolve(undefined);
-    instance = undefined;
-    return result;
+    return vfs.stop();
   };
 }
 
