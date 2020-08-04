@@ -25,10 +25,11 @@ function watch(path, handler) {
   let vfs = new VFS(path, Native);
   vfs.watch(handler);
   return () => {
+    // switch to use vfs.stop
+    // 
     return vfs.stop();
   };
 }
-
 function getInfo(path, flags) {
   return {
     path,
