@@ -20,7 +20,7 @@ function resolveVirtual(p) {
   return resolveVirtual(path.join(target, backstep, subpath));
 }
 
-function getVirtualPaths(root) {
+function findVirtualPaths(root) {
   const paths = [];
   if (process.versions.pnp) {
     const pnp = require(`pnpapi`);
@@ -42,31 +42,6 @@ function getVirtualPaths(root) {
   return paths;
 }
 
-function transpose(watchedPath, resolvedPath, p) {
-  const transposePath = watchedPath + p.substr(resolvedPath.length);
-  return transposePath;
-}
-
-/**
- * build raw and resolved path mapping
- * @param {*} root
- */
-function buildPathMap(root) {
-  const pathMap = new Map();
-  const resolvedRoot = resolveVirtual(root);
-  pathMap.set(resolvedRoot, root);
-  if (!path.extname(root)) {
-    // check virtuals when root is a folder.
-    const virtualPaths = getVirtualPaths(root);
-    virtualPaths.forEach((virtualPath) => {
-      const resolvedVirtual = resolveVirtual(virtualPath);
-      if (resolvedVirtual.indexOf(resolvedRoot) < 0) {
-        pathMap.set(resolvedVirtual, virtualPath);
-      }
-    });
-  }
-  return pathMap;
-}
 
 class VFS {
   constructor(p, Native) {
@@ -75,11 +50,37 @@ class VFS {
     this.watchers = [];
   }
 
+  transpose(rawPath, resolvedPath, p) {
+    const transposePath = rawPath + p.substr(resolvedPath.length);
+    return transposePath;
+  }
+
+  /**
+   * build raw and resolved path mapping
+   * @param {*} root
+   */
+  buildPathMap() {
+    const pathMap = new Map();
+    this.resolvedRoot = resolveVirtual(this.root);
+    pathMap.set(this.resolvedRoot, this.root);
+    if (!path.extname(this.root)) {
+      // find all direct virtual paths for given root.
+      const virtualPaths = findVirtualPaths(this.root);
+      virtualPaths.forEach((virtualPath) => {
+        const resolvedVirtual = resolveVirtual(virtualPath);
+        if (resolvedVirtual.indexOf(this.resolvedRoot) < 0) {
+          pathMap.set(resolvedVirtual, virtualPath);
+        }
+      });
+    }
+    return pathMap;
+  }
+
   watch(handler) {
-    const pathMap = buildPathMap(this.root);
+    const pathMap = this.buildPathMap();
     pathMap.forEach((virtualPath, resolvedPath) => {
       const watcher = this.native.start(resolvedPath, (p, ...args) => {
-        return handler(transpose(virtualPath, resolvedPath, p), ...args);
+        return handler(this.transpose(virtualPath, resolvedPath, p), ...args);
       });
       if (!watcher) throw new Error(`could not watch: ${resolvedPath}`);
       this.watchers.push(watcher);
@@ -96,6 +97,7 @@ class VFS {
       return p;
     });
     this.watchers = [];
+    this.resolvedRoot = undefined;
     return results[0];
   }
 }
